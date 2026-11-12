@@ -3,6 +3,9 @@
 Versions follow semantic versioning: MAJOR.MINOR.PATCH.
 MAJOR for changes that break saved settings or commands, MINOR for new features, PATCH for fixes.
 
+## 1.0.1 (2026-11-12)
+- `/hoverwise` opens the options without a "tried to call the protected function" error from Blizzard's options window. Without the client call that allows that, it says where to find the options instead.
+
 ## 1.0.0 (2026-11-12)
 - Tooltips follow the cursor (to its right), for the game world and, optionally, the interface. Offsets can be set.
 - Unit tooltips show the unit's target, coloured by class or reaction, kept up to date while the tooltip is shown.
