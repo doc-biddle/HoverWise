@@ -1,0 +1,11 @@
+## Interface: 16001
+## Title: HoverWise |cff00aa00@project-version@|r
+## IconTexture: Interface\Icons\INV_Misc_Spyglass_02
+## Notes: Smarter tooltips: they follow the cursor, show a unit's target and guild rank, and show the profession level ore, herbs and corpses need.
+## Author: Phillip
+## X-License: GPL-3.0
+## X-Website: https://gitlab.com/docbiddle/HoverWise
+## Version: @project-version@
+## SavedVariables: HoverWiseDB
+
+HoverWise.lua

@@ -1,0 +1,11 @@
+package-as: HoverWise
+
+manual-changelog:
+  filename: CHANGELOG.md
+  markup-type: markdown
+
+ignore:
+  - media
+  - README.md
+  - .previews
+  - .gitlab-ci.yml
