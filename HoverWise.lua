@@ -2,7 +2,8 @@
 --  * tooltips follow the cursor, at the size and background opacity you choose,
 --  * unit tooltips: class colours, a level line coloured by difficulty, health numbers, the unit's target and its
 --    target's target, who in your group targets it, guild rank, and your standing with its faction,
---  * ore veins, herbs, beasts, recipes and lockboxes show the profession level they need, coloured against your skill.
+--  * ore veins, herbs, beasts, recipes and lockboxes show the profession level they need, coloured against your skill,
+--  * damage spells show whether they beat your equipped wand, per second of casting.
 --
 -- Only hooks are used (hooksecurefunc, HookScript and the tooltip data post-calls): no Blizzard function is replaced.
 
@@ -30,6 +31,7 @@ local DEFAULTS = {
 	skinLiving = true,     -- skinning level on living beasts too
 	recipes = true,        -- recipe skill coloured against yours, with known / learnable
 	lockpicking = true,    -- lockpicking level on lockboxes and junkboxes
+	wandCompare = true,    -- damage spells: compare damage per second of casting with your wand
 }
 
 local function DB()
@@ -519,6 +521,156 @@ local function AddItem(tooltip)
 	tooltip:Show()
 end
 
+-- Spells: compare with your wand ------------------------------------------------------------------------------
+
+local WAND_SLOT = INVSLOT_RANGED or 18
+local GCD = 1.5
+
+-- Your wand's damage per second, the way the character sheet works it out: average hit plus bonuses, times the
+-- damage modifier (which carries talents such as Wand Specialization), divided by the attack speed. nil without a wand.
+local function WandDPS()
+	local itemID = GetInventoryItemID("player", WAND_SLOT)
+	if not itemID then return nil end
+	local _, _, _, _, _, classID, subclassID = (C_Item and C_Item.GetItemInfoInstant or GetItemInfoInstant)(itemID)
+	local wandClass = (Enum and Enum.ItemWeaponSubclass and Enum.ItemWeaponSubclass.Wand) or 19
+	if classID ~= 2 or subclassID ~= wandClass then return nil end
+	local speed, minDamage, maxDamage, bonusPos, bonusNeg, percent = UnitRangedDamage("player")
+	for _, v in ipairs({ speed, minDamage, maxDamage, bonusPos, bonusNeg, percent }) do
+		if Secret(v) then return nil end
+	end
+	if not speed or speed <= 0 or not minDamage then return nil end
+	local hit = ((minDamage + maxDamage) / 2 + (bonusPos or 0) + (bonusNeg or 0)) * (percent or 1)
+	return math.max(hit, 1) / speed, speed, minDamage, maxDamage, percent
+end
+
+local function Number(text) return tonumber((text:gsub(",", ""))) end
+
+-- What a damage spell does, read from its own description: direct damage ("14 to 22 Fire damage"), damage over time
+-- ("2 Fire damage over 4 sec"), how long it takes to cast (at least the global cooldown) and whether it is channelled.
+-- nil for spells that don't deal damage.
+local function SpellDamage(tooltip, spellID)
+	local text = {}
+	local channelled = false
+	for i = 2, tooltip:NumLines() do
+		local left = Line(tooltip, i)
+		local t = left and left:GetText()
+		if t and not Secret(t) then
+			text[#text + 1] = t
+			if t:find(SPELL_CAST_CHANNELED or "Channeled", 1, true) then channelled = true end
+		end
+		local right = _G[tooltip:GetName() .. "TextRight" .. i]
+		local r = right and right:IsShown() and right:GetText()
+		if r and not Secret(r) and r:find(SPELL_CAST_CHANNELED or "Channeled", 1, true) then channelled = true end
+	end
+	-- Spell texts can have doubled spaces ("28 to 32  Frost damage"), so runs of spaces count as one.
+	local all = table.concat(text, " "):gsub("%s+", " ")
+
+	-- Each "N <school> damage" or "N to M <school> damage" in the text is either damage over time (directly followed by
+	-- "over N sec") or an up-front hit: "Burns the enemy for 11 Fire damage and then an additional 20 Fire damage over
+	-- 15 sec" is 11 up front and 20 over 15 seconds.
+	local direct, dot, secs = 0, 0, nil
+	local pos = 1
+	while true do
+		local first, last = all:find("damage", pos, true)
+		if not first then break end
+		local before = all:sub(math.max(1, first - 40), first - 1)
+		local lo, hi = before:match("([%d,]+) to ([%d,]+) %a*%s?$")
+		local one = not lo and before:match("([%d,]+) %a*%s?$")
+		local amount = lo and (Number(lo) + Number(hi)) / 2 or (one and Number(one))
+		if amount then
+			local after = all:sub(last + 1, last + 40)
+			local over = after:match("^ over ([%d%.]+) sec")
+			-- "25 Arcane damage each second for 3 sec" or "every 2 sec for 10 sec": damage per tick.
+			local perSecondFor = after:match("^ each second for ([%d%.]+) sec") or after:match("^ per second for ([%d%.]+) sec")
+			local every, everyFor = after:match("^ every ([%d%.]+) sec%a* for ([%d%.]+) sec")
+			if over then
+				dot, secs = dot + amount, tonumber(over)
+			elseif perSecondFor then
+				dot, secs = dot + amount * tonumber(perSecondFor), tonumber(perSecondFor)
+			elseif every and tonumber(every) > 0 then
+				dot, secs = dot + amount * tonumber(everyFor) / tonumber(every), tonumber(everyFor)
+			else
+				direct = direct + amount
+			end
+		end
+		pos = last + 1
+	end
+	-- Health drains don't say "damage": "Transfers 10 health every 1 sec from the target to the caster. Lasts 5 sec."
+	-- or "drains 55 health over 5 sec".
+	if direct <= 0 and dot <= 0 then
+		local each, every = all:match("([%d,]+) health every ([%d%.]+) sec")
+		local lasts = all:match("[Ll]asts ([%d%.]+) sec") or all:match("for ([%d%.]+) sec")
+		if each and every and lasts and tonumber(every) > 0 then
+			dot, secs = Number(each) * tonumber(lasts) / tonumber(every), tonumber(lasts)
+		else
+			local amount, over = all:match("([%d,]+) health[^%.]- over ([%d%.]+) sec")
+			if amount then dot, secs = Number(amount), tonumber(over) end
+		end
+	end
+	if direct <= 0 and dot <= 0 then return nil end
+
+	local castTime = 0
+	local info = C_Spell and C_Spell.GetSpellInfo and C_Spell.GetSpellInfo(spellID)
+	if info and info.castTime then
+		castTime = info.castTime / 1000
+	elseif GetSpellInfo then
+		castTime = (select(4, GetSpellInfo(spellID)) or 0) / 1000
+	end
+	return { direct = direct, dot = dot, dotSeconds = secs, cast = math.max(castTime, GCD), channelled = channelled }
+end
+
+-- Heals, buffs and the like are left alone (Renew's text says "46 damage over 15 sec").
+local function Harmful(spellID, name)
+	if C_Spell and C_Spell.IsSpellHarmful then
+		local ok, harmful = pcall(C_Spell.IsSpellHarmful, spellID)
+		if ok and harmful ~= nil then return harmful end
+	end
+	if IsHarmfulSpell and name then
+		local ok, harmful = pcall(IsHarmfulSpell, name)
+		if ok and harmful ~= nil then return harmful and true or false end
+	end
+	return nil
+end
+
+local function Verdict(spell, wand)
+	if spell > wand then
+		return ("|cff40ff40Beats your wand:|r %.1f vs %.1f damage per second"):format(spell, wand)
+	end
+	return ("|cffff8040Your wand does more:|r %.1f vs %.1f damage per second"):format(wand, spell)
+end
+
+local function AddWandCompare(tooltip)
+	if not DB().wandCompare or tooltip.hoverWiseSpell then return end
+	tooltip.hoverWiseSpell = true
+	local name, spellID = tooltip:GetSpell()
+	if not spellID then return end
+	local wand = WandDPS()
+	if not wand then return end
+	local harmful = Harmful(spellID, name)
+	if harmful == false then return end
+	local d = SpellDamage(tooltip, spellID)
+	if not d then return end
+	if harmful == nil then
+		-- Without the game's answer, anything whose text talks about healing is left alone.
+		for i = 2, tooltip:NumLines() do
+			local fs = Line(tooltip, i)
+			local t = fs and fs:GetText()
+			if t and not Secret(t) and t:lower():find("heal", 1, true) then return end
+		end
+	end
+
+	if d.channelled and d.dotSeconds then
+		-- Channelled: all of it comes during the channel.
+		tooltip:AddLine(Verdict((d.direct + d.dot) / math.max(d.dotSeconds, GCD), wand))
+	elseif d.direct > 0 then
+		-- Only the up-front hit counts: Immolate's initial burn, not its damage over time.
+		tooltip:AddLine(Verdict(d.direct / d.cast, wand))
+	else
+		return   -- damage over time only: no comparison
+	end
+	tooltip:Show()
+end
+
 -- Wiring ---------------------------------------------------------------------------------------------------------
 
 local function OnUnit(tooltip)
@@ -544,6 +696,11 @@ end
 if TooltipDataProcessor and TooltipDataProcessor.AddTooltipPostCall and Enum and Enum.TooltipDataType then
 	TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Unit, OnUnit)
 	TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Item, OnItem)
+	if Enum.TooltipDataType.Spell then
+		TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Spell, function(tooltip)
+			if tooltip == GameTooltip then Try(AddWandCompare, tooltip) end
+		end)
+	end
 	if Enum.TooltipDataType.Object then
 		TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Object, function(tooltip)
 			if tooltip == GameTooltip then Try(AddNode, tooltip) end
@@ -565,6 +722,7 @@ for _, tip in ipairs({ GameTooltip, ItemRefTooltip }) do
 		tip:HookScript("OnTooltipCleared", function(tooltip)
 			tooltip.hoverWiseNode = nil
 			tooltip.hoverWiseItem = nil
+			tooltip.hoverWiseSpell = nil
 			tooltip.hoverWiseUnit = nil
 			tooltip.hoverWiseTarget = nil
 			tooltip.hoverWiseTargetedBy = nil
@@ -651,6 +809,9 @@ local function BuildOptions()
 	Toggle("recipes", "Recipe skill and status", "Recipes, patterns and plans show the skill they need coloured against yours, and whether you already know them, can learn them, or what your skill is.")
 	Toggle("lockpicking", "Lockpicking level on lockboxes", "Lockboxes and junkboxes show the lockpicking skill needed to open them.")
 
+	Section("Spells")
+	Toggle("wandCompare", "Compare damage spells with your wand", "On a damage spell, shows whether it beats your equipped wand per second of casting (cast time, at least the global cooldown; the channel for channelled spells). Damage over time counts in full. Only shown with a wand equipped.")
+
 	Settings.RegisterAddOnCategory(cat)
 	category = cat
 end
@@ -665,7 +826,14 @@ events:SetScript("OnEvent", function(self, event, name)
 end)
 
 SLASH_HOVERWISE1 = "/hoverwise"
-SlashCmdList.HOVERWISE = function()
+SlashCmdList.HOVERWISE = function(msg)
+	if (msg or ""):lower():match("^%s*wand") then
+		local dps, speed, minDamage, maxDamage, percent = WandDPS()
+		if not dps then print("HoverWise: no wand equipped (or its numbers are hidden right now).") return end
+		print(("HoverWise wand: %.1f damage per second (%s to %s damage, speed %.2f, modifier %.2f). Talents such as Wand Specialization are already part of the damage range.")
+			:format(dps, tostring(minDamage), tostring(maxDamage), speed, percent or 1))
+		return
+	end
 	if not category then BuildOptions() end
 	-- Opening Blizzard's options window from addon code makes the game treat the whole window as addon-driven, and
 	-- Blizzard's own checks inside it then get blocked and blamed on this addon. The client's own call avoids that;

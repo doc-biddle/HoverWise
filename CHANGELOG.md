@@ -3,6 +3,10 @@
 Versions follow semantic versioning: MAJOR.MINOR.PATCH.
 MAJOR for changes that break saved settings or commands, MINOR for new features, PATCH for fixes.
 
+## 1.1.0 (2026-11-12)
+- Damage spells show whether they beat your equipped wand, per second of casting (at least the global cooldown): "Beats your wand: 25.0 vs 14.8 damage per second" or "Your wand does more". Only the up-front hit counts, not damage over time (Immolate is compared on its initial burn); spells that only do damage over time, and heals, get no comparison. Channelled spells count over the channel. Only shown with a wand equipped; can be turned off in the options.
+- `/hoverwise wand` shows your wand's damage per second and the numbers behind it. Talents such as Wand Specialization are already part of the wand's damage range.
+
 ## 1.0.1 (2026-11-12)
 - `/hoverwise` opens the options without a "tried to call the protected function" error from Blizzard's options window. Without the client call that allows that, it says where to find the options instead.
 
