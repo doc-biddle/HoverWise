@@ -3,6 +3,9 @@
 Versions follow semantic versioning: MAJOR.MINOR.PATCH.
 MAJOR for changes that break saved settings or commands, MINOR for new features, PATCH for fixes.
 
+## 1.1.2 (2026-11-13)
+- No more "attempt to call a nil value" error (HoverWise.lua:514) when hovering an item: the recipe check used `GetItemInfo`, which this client no longer has.
+
 ## 1.1.1 (2026-11-13)
 - Wand comparison reads the cast time from the tooltip's own cast line ("1.5 sec cast"), which always includes talents such as Improved Frostbolt.
 - No more "Secret values are only allowed during untainted execution" or "attempt to compare a secret value" errors when hovering units in dungeons, where the game keeps the tooltip's unit, and some answers about it (level, creature type), secret. Units under the cursor still get the tooltip; anything the game keeps secret is left as the game shows it.

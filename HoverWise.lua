@@ -511,7 +511,10 @@ local function AddItem(tooltip)
 	end
 
 	if not db.recipes or not link then return end
-	local classID = select(12, GetItemInfo(link))
+	-- GetItemInfo is gone as a global in this client; the instant lookup also works for items not yet cached
+	local itemInfoInstant = (C_Item and C_Item.GetItemInfoInstant) or GetItemInfoInstant
+	if not itemInfoInstant then return end
+	local _, _, _, _, _, classID = itemInfoInstant(link)
 	local recipeClass = (Enum and Enum.ItemClass and Enum.ItemClass.Recipe) or 9
 	if classID ~= recipeClass then return end
 	local known = FindLine(tooltip, function(text) return text == KNOWN end) ~= nil
