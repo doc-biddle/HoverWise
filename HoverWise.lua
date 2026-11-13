@@ -51,6 +51,12 @@ local function Secret(v)
 	return issecretvalue ~= nil and issecretvalue(v) == true
 end
 
+-- A value the game returned, or nil when it is secret (it can't be tested or compared then).
+local function Plain(v)
+	if Secret(v) then return nil end
+	return v
+end
+
 -- Runs a feature without letting its errors reach the game; each different error is printed once per session.
 local reported = {}
 local function Try(fn, ...)
@@ -77,20 +83,21 @@ local function Hex(r, g, b)
 end
 
 local function ClassColor(unit)
-	if not UnitIsPlayer(unit) then return nil end
+	if not Plain(UnitIsPlayer(unit)) then return nil end
 	local _, class = UnitClass(unit)
+	class = Plain(class)
 	return class and (CUSTOM_CLASS_COLORS or RAID_CLASS_COLORS)[class]
 end
 
 local function ReactionColor(unit)
-	local reaction = UnitReaction(unit, "player")
+	local reaction = Plain(UnitReaction(unit, "player"))
 	return reaction and FACTION_BAR_COLORS and FACTION_BAR_COLORS[reaction]
 end
 
 -- A unit's name in its class colour (players) or reaction colour (everything else).
 local function ColoredName(unit)
-	if not UnitExists(unit) then return nil end
-	local name = UnitName(unit)
+	if not Plain(UnitExists(unit)) then return nil end
+	local name = Plain(UnitName(unit))
 	if not name then return nil end
 	if SameUnit(unit, "player") then return "|cffff4040>> You <<|r" end
 	local c = ClassColor(unit) or ReactionColor(unit)
@@ -211,7 +218,9 @@ local function StyleLevel(tooltip, unit)
 	local levelWord = LEVEL or "Level"
 	local fs = FindLine(tooltip, function(text) return text:find(levelWord, 1, true) == 1 end, 2)
 	if not fs then return end
-	local level = UnitLevel(unit)
+	local raw = UnitLevel(unit)
+	if Secret(raw) then return end   -- the game's own line already shows it; ours would read "??"
+	local level = raw
 	local c
 	if level and level > 0 then
 		c = (GetCreatureDifficultyColor or GetQuestDifficultyColor)(level)
@@ -221,7 +230,8 @@ local function StyleLevel(tooltip, unit)
 	local text = fs:GetText()
 	local shown = level and level > 0 and tostring(level) or "??"
 	text = text:gsub("^(" .. levelWord .. "%s+)(%S+)", function(word) return word .. Hex(c.r, c.g, c.b) .. shown .. "|r" end, 1)
-	local class = UnitClassification and CLASSIFICATION[UnitClassification(unit)]
+	local classification = UnitClassification and Plain(UnitClassification(unit))
+	local class = classification and CLASSIFICATION[classification]
 	if class and not text:find(class, 1, true) then
 		text = text:gsub("^(" .. levelWord .. "%s+%S+)", "%1 |cffffd100" .. class .. "|r", 1)
 	end
@@ -230,8 +240,9 @@ end
 
 local function AddGuildRank(tooltip, unit)
 	local db = DB()
-	if not db.rank or not UnitIsPlayer(unit) then return end
+	if not db.rank or not Plain(UnitIsPlayer(unit)) then return end
 	local guild, rank = GetGuildInfo(unit)
+	guild, rank = Plain(guild), Plain(rank)
 	if not (guild and rank) then return end
 	if not db.rankAll and guild ~= GetGuildInfo("player") then return end
 	local fs = FindLine(tooltip, function(text) return text:find(guild, 1, true) ~= nil end)
@@ -261,7 +272,7 @@ end
 
 -- "Orgrimmar" becomes "Orgrimmar - Honored", in the standing's colour.
 local function AddFaction(tooltip, unit)
-	if not DB().faction or UnitIsPlayer(unit) then return end
+	if not DB().faction or Plain(UnitIsPlayer(unit)) then return end
 	local list = Standings()
 	local fs, _ = FindLine(tooltip, function(text) return list[text] ~= nil end, 2)
 	if not fs then return end
@@ -298,7 +309,7 @@ local function TargetedByText(unit)
 	end
 	-- "playertarget" doesn't match in this client, so your own target is checked as "target".
 	local function Check(member)
-		if UnitExists(member) and SameUnit(member == "player" and "target" or member .. "target", unit) then names[#names + 1] = ColoredName(member) end
+		if Plain(UnitExists(member)) and SameUnit(member == "player" and "target" or member .. "target", unit) then names[#names + 1] = ColoredName(member) end
 	end
 	if prefix == "party" then Check("player") end
 	for i = 1, count do Check(prefix .. i) end
@@ -333,7 +344,7 @@ local bar = GameTooltipStatusBar
 local function UpdateHealth()
 	if not bar or not bar.hoverWiseText then return end
 	local unit = GameTooltip.hoverWiseUnit
-	if not (DB().healthText and unit and UnitExists(unit)) then bar.hoverWiseText:SetText("") return end
+	if not (DB().healthText and unit and Plain(UnitExists(unit))) then bar.hoverWiseText:SetText("") return end
 	local hp, max = UnitHealth(unit), UnitHealthMax(unit)
 	if Secret(hp) or Secret(max) then
 		-- Can be shown, not worked with: plain numbers, no percentage.
@@ -447,16 +458,19 @@ local BEAST = "Beast"
 
 local function AddSkinning(tooltip, unit)
 	local db = DB()
-	if not db.profession or UnitIsPlayer(unit) then return end
-	-- Hunter pets, warlock demons and other player-controlled units can't be skinned.
-	if UnitPlayerControlled and UnitPlayerControlled(unit) then return end
-	local level = UnitLevel(unit)
+	if not db.profession or Plain(UnitIsPlayer(unit)) then return end
+	-- Hunter pets, warlock demons and other player-controlled units can't be skinned (a secret answer: don't know).
+	local controlled = UnitPlayerControlled and UnitPlayerControlled(unit)
+	if Secret(controlled) or controlled then return end
+	local level = Plain(UnitLevel(unit))
 	if not level or level <= 0 then return end
 	local text = SkillText("Skinning", SkinningNeed(level))
-	if UnitIsDead(unit) then
+	if Plain(UnitIsDead(unit)) then
 		local fs = FindLine(tooltip, function(t) return t == SKINNABLE end)
 		if fs then fs:SetText(text) end
-	elseif db.skinLiving and UnitCreatureType and UnitCreatureType(unit) == BEAST then
+	elseif db.skinLiving and UnitCreatureType and Plain(UnitCreatureType(unit)) == BEAST
+		-- only beasts you can fight: not quest givers such as the Great Cat Spirit, or other friendly beasts
+		and UnitCanAttack and Plain(UnitCanAttack("player", unit)) then
 		tooltip:AddLine(text)
 	end
 end
@@ -470,7 +484,7 @@ local function AddNode(tooltip)
 	if (tooltip.GetItem and tooltip:GetItem()) or (tooltip.GetUnit and tooltip:GetUnit()) then return end
 	if tooltip.GetSpell and tooltip:GetSpell() then return end
 	local first = Line(tooltip, 1)
-	local node = first and NODES[first:GetText() or ""]
+	local node = first and NODES[Plain(first:GetText()) or ""]
 	if not node then return end
 	tooltip.hoverWiseNode = true
 	-- Replace Blizzard's "Requires Mining" or "Mining" line if there is one, otherwise add a line.
@@ -609,12 +623,28 @@ local function SpellDamage(tooltip, spellID)
 	end
 	if direct <= 0 and dot <= 0 then return nil end
 
-	local castTime = 0
-	local info = C_Spell and C_Spell.GetSpellInfo and C_Spell.GetSpellInfo(spellID)
-	if info and info.castTime then
-		castTime = info.castTime / 1000
-	elseif GetSpellInfo then
-		castTime = (select(4, GetSpellInfo(spellID)) or 0) / 1000
+	-- The cast time as the tooltip shows it ("1.5 sec cast", "Instant"), which already includes talents such as Improved
+	-- Frostbolt; the spell data is only asked when the tooltip has no cast line.
+	local castTime
+	for i = 2, math.min(4, tooltip:NumLines()) do
+		for _, side in ipairs({ "TextLeft", "TextRight" }) do
+			local fs = _G[tooltip:GetName() .. side .. i]
+			local t = fs and fs:IsShown() and fs:GetText()
+			if t and not Secret(t) then
+				local secs = t:match("^([%d%.]+) sec cast") or t:match("^([%d%.]+) seconds? cast")
+				if secs then castTime = tonumber(secs)
+				elseif t == (SPELL_CAST_TIME_INSTANT or "Instant") or t == "Instant cast" then castTime = 0 end
+			end
+		end
+	end
+	if not castTime then
+		castTime = 0
+		local info = C_Spell and C_Spell.GetSpellInfo and C_Spell.GetSpellInfo(spellID)
+		if info and info.castTime then
+			castTime = info.castTime / 1000
+		elseif GetSpellInfo then
+			castTime = (select(4, GetSpellInfo(spellID)) or 0) / 1000
+		end
 	end
 	return { direct = direct, dot = dot, dotSeconds = secs, cast = math.max(castTime, GCD), channelled = channelled }
 end
@@ -677,6 +707,16 @@ local function OnUnit(tooltip)
 	if tooltip ~= GameTooltip then return end
 	local _, unit = tooltip:GetUnit()
 	if not unit then return end
+	-- In some places (dungeons, for one) the game hands addons the unit as a secret value, which no unit function
+	-- accepts. A tooltip for something under the cursor is the mouseover unit; any other secret unit is left alone.
+	if Secret(unit) then
+		local owner = tooltip:GetOwner()
+		if (owner == UIParent or owner == WorldFrame) and UnitExists("mouseover") then
+			unit = "mouseover"
+		else
+			return
+		end
+	end
 	tooltip.hoverWiseUnit = unit
 	tooltip.hoverWiseTarget = nil
 	tooltip.hoverWiseTargetedBy = nil

@@ -3,6 +3,11 @@
 Versions follow semantic versioning: MAJOR.MINOR.PATCH.
 MAJOR for changes that break saved settings or commands, MINOR for new features, PATCH for fixes.
 
+## 1.1.1 (2026-11-13)
+- Wand comparison reads the cast time from the tooltip's own cast line ("1.5 sec cast"), which always includes talents such as Improved Frostbolt.
+- No more "Secret values are only allowed during untainted execution" or "attempt to compare a secret value" errors when hovering units in dungeons, where the game keeps the tooltip's unit, and some answers about it (level, creature type), secret. Units under the cursor still get the tooltip; anything the game keeps secret is left as the game shows it.
+- The skinning line on living beasts only shows on beasts you can attack, not on friendly ones such as the Great Cat Spirit.
+
 ## 1.1.0 (2026-11-12)
 - Damage spells show whether they beat your equipped wand, per second of casting (at least the global cooldown): "Beats your wand: 25.0 vs 14.8 damage per second" or "Your wand does more". Only the up-front hit counts, not damage over time (Immolate is compared on its initial burn); spells that only do damage over time, and heals, get no comparison. Channelled spells count over the channel. Only shown with a wand equipped; can be turned off in the options.
 - `/hoverwise wand` shows your wand's damage per second and the numbers behind it. Talents such as Wand Specialization are already part of the wand's damage range.
