@@ -57,16 +57,24 @@ local function Plain(v)
 	return v
 end
 
--- Runs a feature without letting its errors reach the game; each different error is printed once per session.
+-- Runs a feature without letting its errors break the tooltip; each different error is printed once per session
+-- and passed to the game's error handler (so error-collecting addons such as BugSack see it), from inside the
+-- failing call so the handler still sees where it happened.
 local reported = {}
-local function Try(fn, ...)
-	local ok, a, b = pcall(fn, ...)
-	if ok then return a, b end
-	local message = tostring(a)
+local function OnError(err)
+	local message = tostring(err)
 	if not reported[message] then
 		reported[message] = true
 		print("|cff40c0ffHoverWise|r error (shown once): " .. message)
+		local handler = geterrorhandler and geterrorhandler()
+		if handler then pcall(handler, message) end
 	end
+	return err
+end
+local function Try(fn, ...)
+	local n, args = select("#", ...), { ... }
+	local ok, a, b = xpcall(function() return fn(unpack(args, 1, n)) end, OnError)
+	if ok then return a, b end
 end
 
 -- Whether two unit tokens are the same unit. Falls back to comparing GUIDs when the game keeps the answer secret.
@@ -120,6 +128,16 @@ end
 
 -- Your rank in a skill, by name (nil if you don't have it).
 local function SkillRank(name)
+	-- This client: C_SkillInfo, one table per line ({ name, rank, maxRank, isHeader, skillID, ... }).
+	local SI = C_SkillInfo
+	if SI and SI.GetNumSkillLines and SI.GetSkillLineInfo then
+		for i = 1, SI.GetNumSkillLines() do
+			local info = SI.GetSkillLineInfo(i)
+			if info and not info.isHeader and info.name == name then return info.rank end
+		end
+		return nil
+	end
+	-- Other clients: the old globals.
 	if GetNumSkillLines and GetSkillLineInfo then
 		for i = 1, GetNumSkillLines() do
 			local skill, isHeader, _, rank = GetSkillLineInfo(i)
@@ -634,8 +652,8 @@ local function SpellDamage(tooltip, spellID)
 			local fs = _G[tooltip:GetName() .. side .. i]
 			local t = fs and fs:IsShown() and fs:GetText()
 			if t and not Secret(t) then
-				local secs = t:match("^([%d%.]+) sec cast") or t:match("^([%d%.]+) seconds? cast")
-				if secs then castTime = tonumber(secs)
+				local castSecs = t:match("^([%d%.]+) sec cast") or t:match("^([%d%.]+) seconds? cast")
+				if castSecs then castTime = tonumber(castSecs)
 				elseif t == (SPELL_CAST_TIME_INSTANT or "Instant") or t == "Instant cast" then castTime = 0 end
 			end
 		end

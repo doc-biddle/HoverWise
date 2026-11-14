@@ -3,6 +3,10 @@
 Versions follow semantic versioning: MAJOR.MINOR.PATCH.
 MAJOR for changes that break saved settings or commands, MINOR for new features, PATCH for fixes.
 
+## Unreleased
+- Recipe tooltips show your skill again ("you have 126"): the skill lookup used `GetNumSkillLines`, which this client no longer has, so every recipe looked unlearnable. It now reads `C_SkillInfo`.
+- If something inside HoverWise fails, the error is printed once and also passed to the game's error handler, so BugSack and similar addons collect it with a full stack.
+
 ## 1.1.2 (2026-11-13)
 - No more "attempt to call a nil value" error (HoverWise.lua:514) when hovering an item: the recipe check used `GetItemInfo`, which this client no longer has.
 
