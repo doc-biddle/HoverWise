@@ -29,6 +29,7 @@ A small WoW Forever addon that makes tooltips more useful. Every feature below c
 - **Skinning level** on skinnable corpses, and optionally on living beasts before you kill them (not on hunter pets or other player-controlled creatures).
 - **Recipe status** on recipes, patterns and plans: the skill they need, and whether you know them, can learn them, or what your skill is now.
 - **Lockpicking level** on lockboxes and junkboxes.
+- Gathering, skinning and lockpicking levels only show on characters that have the skill.
 - Required levels are coloured against your own skill: red means you can't yet, then orange, yellow, green and grey as skill-ups get rarer.
 
 ### Spells

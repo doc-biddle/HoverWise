@@ -3,6 +3,9 @@
 Versions follow semantic versioning: MAJOR.MINOR.PATCH.
 MAJOR for changes that break saved settings or commands, MINOR for new features, PATCH for fixes.
 
+## 1.2.0 (2026-11-15)
+- Gathering, skinning and lockpicking levels only show on characters that have the skill: no more "Skinning 100" on every beast for a character who isn't a skinner. Recipes still show the skill they need for everyone.
+
 ## 1.1.3 (2026-11-14)
 - Recipe tooltips show your skill again ("you have 126"): the skill lookup used `GetNumSkillLines`, which this client no longer has, so every recipe looked unlearnable. It now reads `C_SkillInfo`.
 - If something inside HoverWise fails, the error is printed once and also passed to the game's error handler, so BugSack and similar addons collect it with a full stack.

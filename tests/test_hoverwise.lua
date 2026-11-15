@@ -77,6 +77,7 @@ local function World(units, opts)
 		{ name = "Tailoring", isHeader = false, rank = 120, maxRank = 150, skillID = 197 },
 		{ name = "Skinning", isHeader = false, rank = 300, maxRank = 300 },
 	}
+	skills = opts.skills or skills
 	game.C_SkillInfo = {
 		GetNumSkillLines = function() return #skills end,
 		GetSkillLineInfo = function(i) return skills[i] end,
@@ -177,6 +178,34 @@ function cases.errors_are_printed_once_and_passed_to_the_error_handler()
 	for _, line in ipairs(h.Printed()) do if line:find("error (shown once)", 1, true) then printed = printed + 1 end end
 	T.eq(printed, 1, "error printed")
 	T.eq(#h.Errors(), 1, "errors passed to the handler")
+end
+
+-- A tailor with no gathering skills, no skinning and no lockpicking.
+local TAILOR = { { name = "Professions", isHeader = true, rank = 0, maxRank = 0 }, { name = "Tailoring", isHeader = false, rank = 120, maxRank = 150 } }
+
+local function ShowNode(h, tip, name, lines)
+	tip:Reset()
+	tip.owner = h.Env().UIParent
+	for _, l in ipairs(lines) do tip:AddLine(l) end
+	FakeWoW.RunScript(tip, "OnShow")
+	return tip:Text()
+end
+
+function cases.node_shows_the_level_for_a_miner()
+	local _, h, tip = World({})
+	T.has(ShowNode(h, tip, "Tin Vein", { "Tin Vein", "Requires Mining" }), "Mining 65", "tin vein for a miner")
+	T.clean(h)
+end
+
+function cases.no_profession_lines_without_the_profession()
+	local units = { beast = { name = "Plainstrider", level = 24, ctype = "Beast" }, corpse = { name = "Plainstrider", level = 24, ctype = "Beast", dead = true } }
+	local _, h, tip, post = World(units, { skills = TAILOR })
+	T.lacks(ShowUnit(tip, post, "beast", { "Plainstrider", "Level 24 Beast" }), "Skinning", "living beast")
+	T.has(ShowUnit(tip, post, "corpse", { "Plainstrider", "Level 24 Beast", "Skinnable" }), "| Skinnable", "the game's own corpse line is left alone")
+	T.eq(ShowNode(h, tip, "Tin Vein", { "Tin Vein", "Requires Mining" }), "Tin Vein | Requires Mining", "ore vein")
+	T.lacks(ShowItem(tip, post, "Iron Lockbox", { "Iron Lockbox" }), "Lockpicking", "lockbox")
+	T.has(ShowItem(tip, post, "Pattern: Big", { "Pattern: Big", "Requires Tailoring (150)" }), "you have 120", "recipes still show")
+	T.clean(h)
 end
 
 return cases

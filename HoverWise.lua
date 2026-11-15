@@ -2,7 +2,8 @@
 --  * tooltips follow the cursor, at the size and background opacity you choose,
 --  * unit tooltips: class colours, a level line coloured by difficulty, health numbers, the unit's target and its
 --    target's target, who in your group targets it, guild rank, and your standing with its faction,
---  * ore veins, herbs, beasts, recipes and lockboxes show the profession level they need, coloured against your skill,
+--  * ore veins, herbs, beasts and lockboxes show the skill they need, coloured against yours, when you have that
+--    profession; recipes show theirs always,
 --  * damage spells show whether they beat your equipped wand, per second of casting.
 --
 -- Only hooks are used (hooksecurefunc, HookScript and the tooltip data post-calls): no Blizzard function is replaced.
@@ -477,6 +478,8 @@ local BEAST = "Beast"
 local function AddSkinning(tooltip, unit)
 	local db = DB()
 	if not db.profession or Plain(UnitIsPlayer(unit)) then return end
+	-- Not a skinner: the level it needs is no use to you. The game's own "Skinnable" line on corpses stays.
+	if not SkillRank("Skinning") then return end
 	-- Hunter pets, warlock demons and other player-controlled units can't be skinned (a secret answer: don't know).
 	local controlled = UnitPlayerControlled and UnitPlayerControlled(unit)
 	if Secret(controlled) or controlled then return end
@@ -505,6 +508,7 @@ local function AddNode(tooltip)
 	local node = first and NODES[Plain(first:GetText()) or ""]
 	if not node then return end
 	tooltip.hoverWiseNode = true
+	if not SkillRank(node[1]) then return end   -- not a miner or herbalist: the game's own line is left as it is
 	-- Replace Blizzard's "Requires Mining" or "Mining" line if there is one, otherwise add a line.
 	local fs = FindLine(tooltip, function(text) return text ~= first:GetText() and text:find(node[1], 1, true) ~= nil end)
 	if fs then fs:SetText(SkillText(node[1], node[2])) else tooltip:AddLine(SkillText(node[1], node[2])) end
@@ -522,7 +526,7 @@ local function AddItem(tooltip)
 	local name, link = tooltip:GetItem()
 	if not name then return end
 
-	if db.lockpicking and LOCKBOXES[name] then
+	if db.lockpicking and LOCKBOXES[name] and SkillRank("Lockpicking") then
 		tooltip:AddLine(SkillText("Lockpicking", LOCKBOXES[name]))
 		tooltip:Show()
 		return
@@ -865,7 +869,7 @@ local function BuildOptions()
 	Toggle("faction", "Show your faction standing", "Adds your standing after an NPC's faction, such as \"Orgrimmar - Honored\", in the standing's colour.")
 
 	Section("Professions")
-	Toggle("profession", "Show required profession level", "Ore veins, herbs and skinnable corpses show the skill they need, such as \"Mining 175\". The colour compares it with your own skill: red means you can't gather it yet, then orange, yellow, green and grey as skill-ups get rarer.")
+	Toggle("profession", "Show required profession level", "Ore veins, herbs and skinnable corpses show the skill they need, such as \"Mining 175\". The colour compares it with your own skill: red means you can't gather it yet, then orange, yellow, green and grey as skill-ups get rarer. Only shown for professions this character has.")
 	Toggle("skinLiving", "Skinning level on living beasts", "Beasts show the skinning level they will need before you kill them. Needs the setting above.")
 	Toggle("recipes", "Recipe skill and status", "Recipes, patterns and plans show the skill they need coloured against yours, and whether you already know them, can learn them, or what your skill is.")
 	Toggle("lockpicking", "Lockpicking level on lockboxes", "Lockboxes and junkboxes show the lockpicking skill needed to open them.")
