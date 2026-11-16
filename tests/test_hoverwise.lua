@@ -5,7 +5,7 @@
 local function World(units, opts)
 	opts = opts or {}
 	local game, h = FakeWoW.New()
-	local post = {}
+	local post, pre = {}, {}
 
 	-- The tooltip: lines are font strings named GameTooltipTextLeftN, as in the game.
 	local tip = game.CreateFrame("GameTooltip", "GameTooltip")
@@ -34,8 +34,11 @@ local function World(units, opts)
 		FakeWoW.RunScript(self, "OnTooltipCleared")
 	end
 	game.GameTooltipStatusBar = game.CreateFrame("StatusBar", "GameTooltipStatusBar")
-	game.TooltipDataProcessor = { AddTooltipPostCall = function(kind, fn) post[kind] = fn end }
-	game.Enum = { TooltipDataType = { Item = 0, Spell = 1, Unit = 2, Object = 33 }, ItemClass = { Recipe = 9 } }
+	game.TooltipDataProcessor = { AddTooltipPostCall = function(kind, fn) post[kind] = fn end,
+		AddLinePreCall = function(kind, fn) pre[kind] = fn end }
+	game.Enum = { TooltipDataType = { Item = 0, Spell = 1, Unit = 2, Object = 33 }, ItemClass = { Recipe = 9 },
+		TooltipDataLineType = { SellPrice = 11 } }
+	if opts.game then for k, v in pairs(opts.game) do game[k] = v end end
 
 	-- Units.
 	local function U(u) return units[u] or {} end
@@ -91,7 +94,7 @@ local function World(units, opts)
 
 	h.Load("HoverWise.lua", "HoverWise")
 	h.Fire("ADDON_LOADED", "HoverWise")
-	return game, h, tip, post
+	return game, h, tip, post, pre
 end
 
 local function ShowUnit(tip, post, unit, lines)
@@ -206,6 +209,42 @@ function cases.no_profession_lines_without_the_profession()
 	T.lacks(ShowItem(tip, post, "Iron Lockbox", { "Iron Lockbox" }), "Lockpicking", "lockbox")
 	T.has(ShowItem(tip, post, "Pattern: Big", { "Pattern: Big", "Requires Tailoring (150)" }), "you have 120", "recipes still show")
 	T.clean(h)
+end
+
+-- The game's "Sell Price" line: the pre-call returns true when the line is to be skipped.
+local function SellPriceHidden(mode, extra)
+	local tsm = extra and extra.TradeSkillMasterDB
+	if tsm then extra.TradeSkillMasterDB = nil end
+	local game, h, _, _, pre = World({}, { game = extra })
+	if tsm then rawset(h.Env(), "TradeSkillMasterDB", tsm) end   -- another addon's saved settings, not a client name
+	game.HoverWiseDB.vendorPrice = mode
+	local hidden = pre[11]()
+	T.clean(h)
+	return hidden
+end
+
+local function FakeAuctionator(on)
+	return { Config = { Options = { VENDOR_TOOLTIPS = "vendor_tooltips" }, Get = function(name) assert(name == "vendor_tooltips"); return on end } }
+end
+
+function cases.sell_price_line_always_and_never()
+	T.eq(SellPriceHidden(nil, { Auctionator = FakeAuctionator(true) }), false, "default leaves the game's line")
+	T.eq(SellPriceHidden("always", { Auctionator = FakeAuctionator(true) }), false, "always")
+	T.eq(SellPriceHidden("never"), true, "never")
+end
+
+function cases.sell_price_line_hidden_only_when_another_addon_shows_it()
+	local tsm = { ["g@ @tooltipOptions@vendorSellTooltip"] = true, ["g@ @tooltipOptions@enabled"] = true }
+	local loaded = { IsAddOnLoaded = function(name) return name == "TradeSkillMaster" end }
+	T.eq(SellPriceHidden("auto"), false, "no other addon")
+	T.eq(SellPriceHidden("auto", { Auctionator = FakeAuctionator(true) }), true, "Auctionator's vendor line on")
+	T.eq(SellPriceHidden("auto", { Auctionator = FakeAuctionator(false) }), false, "Auctionator's vendor line off")
+	T.eq(SellPriceHidden("auto", { Auctionator = { Config = { Options = { VENDOR_TOOLTIPS = "v" }, Get = function() error("not ready") end } } }), false, "Auctionator not ready")
+	T.eq(SellPriceHidden("auto", { TradeSkillMasterDB = tsm, C_AddOns = loaded }), true, "TSM's vendor line on")
+	T.eq(SellPriceHidden("auto", { TradeSkillMasterDB = { ["g@ @tooltipOptions@vendorSellTooltip"] = false }, C_AddOns = loaded }), false, "TSM's vendor line off")
+	T.eq(SellPriceHidden("auto", { TradeSkillMasterDB = { ["g@ @tooltipOptions@vendorSellTooltip"] = true, ["g@ @tooltipOptions@enabled"] = false }, C_AddOns = loaded }), false, "TSM tooltips off")
+	T.eq(SellPriceHidden("auto", { TradeSkillMasterDB = tsm, C_AddOns = { IsAddOnLoaded = function() return false end } }), false, "TSM's settings left behind, addon not loaded")
+	T.eq(SellPriceHidden("auto", { Auctionator = FakeAuctionator(true), MerchantFrame = { IsShown = function() return true end } }), false, "at a merchant the game's line stays")
 end
 
 return cases

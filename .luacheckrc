@@ -16,7 +16,9 @@ globals = {
 }
 read_globals = {
 	"AbbreviateLargeNumbers",
+	"Auctionator",
 	"BOSS",
+	C_AddOns = { fields = { "IsAddOnLoaded" } },
 	C_Item = { fields = { "GetItemInfoInstant" } },
 	C_Reputation = { fields = { "GetFactionDataByIndex", "GetNumFactions" } },
 	C_SettingsUtil = { fields = { "OpenSettingsPanel" } },
@@ -28,6 +30,7 @@ read_globals = {
 	Enum = { fields = {
 		ItemClass = { fields = { "Recipe" } },
 		ItemWeaponSubclass = { fields = { "Wand" } },
+		TooltipDataLineType = { fields = { "SellPrice" } },
 		TooltipDataType = { fields = { "Item", "Object", "Spell", "Unit" } },
 	} },
 	"FACTION_BAR_COLORS",
@@ -49,6 +52,7 @@ read_globals = {
 	"IsInRaid",
 	"ItemRefTooltip",
 	"LEVEL",
+	"MerchantFrame",
 	"MinimalSliderWithSteppersMixin",
 	"RAID_CLASS_COLORS",
 	"SPELL_CAST_CHANNELED",
@@ -96,5 +100,7 @@ read_globals = {
 	"GetNumSkillLines",
 	"GetSkillLineInfo",
 	"GetSpellInfo",
+	"IsAddOnLoaded",
 	"IsHarmfulSpell",
+	"TradeSkillMasterDB",
 }

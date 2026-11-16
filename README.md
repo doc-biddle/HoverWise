@@ -34,6 +34,7 @@ A small WoW Forever addon that makes tooltips more useful. Every feature below c
 
 ### Spells
 - **Wand comparison** on damage spells, when you have a wand equipped: whether the spell's up-front hit beats your wand per second of casting ("Beats your wand: 25.0 vs 14.8 damage per second"). Damage over time isn't counted, and spells that only do damage over time get no comparison. Talents such as Wand Specialization are included. `/hoverwise wand` shows the wand's numbers.
+- **Vendor prices** once only: the game's own "Sell Price" line can be hidden, always or only while Auctionator or TradeSkillMaster shows its own vendor price. Off by default.
 
 ## Settings
 

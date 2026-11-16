@@ -4,7 +4,8 @@
 --    target's target, who in your group targets it, guild rank, and your standing with its faction,
 --  * ore veins, herbs, beasts and lockboxes show the skill they need, coloured against yours, when you have that
 --    profession; recipes show theirs always,
---  * damage spells show whether they beat your equipped wand, per second of casting.
+--  * damage spells show whether they beat your equipped wand, per second of casting,
+--  * the game's own "Sell Price" line can be hidden, always or only when another addon shows vendor prices.
 --
 -- Only hooks are used (hooksecurefunc, HookScript and the tooltip data post-calls): no Blizzard function is replaced.
 
@@ -33,6 +34,7 @@ local DEFAULTS = {
 	recipes = true,        -- recipe skill coloured against yours, with known / learnable
 	lockpicking = true,    -- lockpicking level on lockboxes and junkboxes
 	wandCompare = true,    -- damage spells: compare damage per second of casting with your wand
+	vendorPrice = "always", -- the game's "Sell Price" line: "always", "auto" (not when another addon shows it) or "never"
 }
 
 local function DB()
@@ -726,6 +728,42 @@ local function AddWandCompare(tooltip)
 	tooltip:Show()
 end
 
+-- The game's own "Sell Price" line ---------------------------------------------------------------------------------
+
+-- The other addon, if any, that is set to add its own vendor price line to item tooltips.
+local function OtherVendorLine()
+	local A = Auctionator
+	if type(A) == "table" and A.Config and A.Config.Get and A.Config.Options and A.Config.Options.VENDOR_TOOLTIPS then
+		local ok, on = pcall(A.Config.Get, A.Config.Options.VENDOR_TOOLTIPS)
+		if ok and on == true then return "Auctionator" end
+	end
+	-- TradeSkillMaster has no call to ask; these are the keys it saves its two tooltip settings under.
+	local T = TradeSkillMasterDB
+	local loaded = (C_AddOns and C_AddOns.IsAddOnLoaded) or IsAddOnLoaded
+	if type(T) == "table" and T["g@ @tooltipOptions@vendorSellTooltip"] == true and T["g@ @tooltipOptions@enabled"] ~= false
+		and loaded and loaded("TradeSkillMaster") then
+		return "TradeSkillMaster"
+	end
+end
+
+-- Whether to leave the game's line out of the tooltip being built. At a merchant the game's line is the price for
+-- the whole stack you are about to sell, which the other addons don't show, so "auto" keeps it there.
+local function HideSellPrice()
+	local mode = DB().vendorPrice
+	if mode == "never" then return true end
+	if mode ~= "auto" then return false end
+	if MerchantFrame and MerchantFrame:IsShown() then return false end
+	return OtherVendorLine() ~= nil
+end
+
+-- A line pre-call that returns true makes the game skip that line; nothing of Blizzard's is replaced.
+if TooltipDataProcessor and TooltipDataProcessor.AddLinePreCall and Enum and Enum.TooltipDataLineType
+	and Enum.TooltipDataLineType.SellPrice then
+	TooltipDataProcessor.AddLinePreCall(Enum.TooltipDataLineType.SellPrice, function()
+		return Try(HideSellPrice) == true
+	end)
+end
+
 -- Wiring ---------------------------------------------------------------------------------------------------------
 
 local function OnUnit(tooltip)
@@ -816,6 +854,7 @@ events:RegisterEvent("UPDATE_FACTION")
 -- Settings -------------------------------------------------------------------------------------------------------
 
 local category
+local VENDOR_CHOICES = { { "always", "Always" }, { "auto", "Unless another addon shows them" }, { "never", "Never" } }
 
 local function BuildOptions()
 	if category or not (Settings and Settings.RegisterVerticalLayoutCategory and Settings.RegisterProxySetting) then return end
@@ -845,6 +884,19 @@ local function BuildOptions()
 			options:SetLabelFormatter(MinimalSliderWithSteppersMixin.Label.Right, function(v) return tostring(v) .. (suffix or "") end)
 		end
 		Settings.CreateSlider(cat, setting, options, tooltip)
+	end
+
+	local function Choice(key, name, choices, tooltip)
+		local Dropdown = Settings.CreateDropdown or Settings.CreateDropDown
+		if not (Dropdown and Settings.CreateControlTextContainer) then return end
+		local setting = Settings.RegisterProxySetting(cat, "HOVERWISE_" .. key:upper(), VT.String or "string", name, DEFAULTS[key],
+			function() return DB()[key] end,
+			function(value) DB()[key] = value end)
+		Dropdown(cat, setting, function()
+			local container = Settings.CreateControlTextContainer()
+			for _, c in ipairs(choices) do container:Add(c[1], c[2]) end
+			return container:GetData()
+		end, tooltip)
 	end
 
 	Section("Position and look")
@@ -877,6 +929,9 @@ local function BuildOptions()
 	Section("Spells")
 	Toggle("wandCompare", "Compare damage spells with your wand", "On a damage spell, shows whether it beats your equipped wand per second of casting (cast time, at least the global cooldown; the channel for channelled spells). Damage over time counts in full. Only shown with a wand equipped.")
 
+	Section("Items")
+	Choice("vendorPrice", "Show vendor prices", VENDOR_CHOICES, "The game's own \"Sell Price\" line on item tooltips. \"Unless another addon shows them\" hides it while Auctionator or TradeSkillMaster is set to show its own vendor price, so the price isn't listed twice; at a merchant the game's line still shows, since it is the price for the whole stack. Also: /hoverwise vendor always, auto or never.")
+
 	Settings.RegisterAddOnCategory(cat)
 	category = cat
 end
@@ -897,6 +952,20 @@ SlashCmdList.HOVERWISE = function(msg)
 		if not dps then print("HoverWise: no wand equipped (or its numbers are hidden right now).") return end
 		print(("HoverWise wand: %.1f damage per second (%s to %s damage, speed %.2f, modifier %.2f). Talents such as Wand Specialization are already part of the damage range.")
 			:format(dps, tostring(minDamage), tostring(maxDamage), speed, percent or 1))
+		return
+	end
+	local vendor = (msg or ""):lower():match("^%s*vendor%s*(%a*)")
+	if vendor then
+		for _, c in ipairs(VENDOR_CHOICES) do
+			if c[1] == vendor then DB().vendorPrice = vendor end
+		end
+		local other = OtherVendorLine()
+		for _, c in ipairs(VENDOR_CHOICES) do
+			if c[1] == DB().vendorPrice then
+				print("HoverWise: show vendor prices: " .. c[2]:lower() .. ". " .. (other and (other .. " is showing its own vendor price.") or "No other addon is showing a vendor price.")
+					.. " (/hoverwise vendor always, auto or never)")
+			end
+		end
 		return
 	end
 	if not category then BuildOptions() end

@@ -3,6 +3,9 @@
 Versions follow semantic versioning: MAJOR.MINOR.PATCH.
 MAJOR for changes that break saved settings or commands, MINOR for new features, PATCH for fixes.
 
+## 1.3.0 (2026-11-16)
+- New option "Show vendor prices" (Options > AddOns > HoverWise > Items, or `/hoverwise vendor always|auto|never`): the game's own "Sell Price" line on item tooltips can be hidden, always or only while Auctionator or TradeSkillMaster is set to show its own vendor price, so the same price isn't listed two or three times. At a merchant the game's line stays, since it is the price for the whole stack. The default is unchanged: always shown.
+
 ## 1.2.0 (2026-11-15)
 - Gathering, skinning and lockpicking levels only show on characters that have the skill: no more "Skinning 100" on every beast for a character who isn't a skinner. Recipes still show the skill they need for everyone.
 

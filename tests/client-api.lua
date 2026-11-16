@@ -3,7 +3,9 @@
 return {
 	globals = {
 		["AbbreviateLargeNumbers"] = "f",
+		["Auctionator"] = "t",
 		["BOSS"] = "s",
+		["C_AddOns"] = "t",
 		["C_Item"] = "t",
 		["C_Reputation"] = "t",
 		["C_SettingsUtil"] = "t",
@@ -33,6 +35,7 @@ return {
 		["IsInRaid"] = "f",
 		["ItemRefTooltip"] = "t",
 		["LEVEL"] = "s",
+		["MerchantFrame"] = "t",
 		["MinimalSliderWithSteppersMixin"] = "t",
 		["RAID_CLASS_COLORS"] = "t",
 		["SPELL_CAST_CHANNELED"] = "s",
@@ -76,6 +79,7 @@ return {
 		["wipe"] = "f",
 	},
 	namespaces = {
+		["C_AddOns"] = { ["IsAddOnLoaded"] = "f" },
 		["C_Item"] = { ["GetItemInfoInstant"] = "f" },
 		["C_Reputation"] = { ["GetFactionDataByIndex"] = "f", ["GetNumFactions"] = "f" },
 		["C_SettingsUtil"] = { ["OpenSettingsPanel"] = "f" },
