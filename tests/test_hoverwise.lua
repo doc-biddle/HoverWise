@@ -50,7 +50,10 @@ local function World(units, opts)
 	game.UnitName = function(u) return Ask(u, "name", U(u).name) end
 	game.UnitIsPlayer = function(u) assert(not FakeWoW.IsSecret(u), "UnitIsPlayer got a secret unit"); return U(u).player or false end
 	game.UnitIsUnit = function(a, b) return a == b end
-	game.UnitGUID = function(u) return units[u] and ("guid-" .. (U(u).name or u)) end
+	game.UnitGUID = function(u) return units[u] and (U(u).guid or ("guid-" .. (U(u).name or u))) end
+	game.UnitCreatureID = function(u) return Ask(u, "creatureID", U(u).id) end
+	game.CanLootUnit = function(guid) for _, x in pairs(units) do if (x.guid or ("guid-" .. (x.name or ""))) == guid then return x.loot or false, x.loot or false end end return false, false end
+	game.UnitIsTapDenied = function(u) return U(u).tapped or false end
 	game.UnitClass = function(u) return U(u).class and "Warrior", U(u).class end
 	game.UnitReaction = function(u) return U(u).reaction end
 	game.UnitIsDead = function(u) return U(u).dead or false end
@@ -136,6 +139,55 @@ function cases.skinning_line_on_hostile_beast_but_not_on_friendly_one()
 	local _, h, tip, post = World(units)
 	T.has(ShowUnit(tip, post, "beast", { "Plainstrider", "Level 24 Beast" }), "Skinning", "hostile beast")
 	T.lacks(ShowUnit(tip, post, "spirit", { "Great Cat Spirit", "Level 60" }), "Skinning", "friendly beast")
+	T.clean(h)
+end
+
+-- Not every beast can be skinned, and the game only says so on the corpse: what corpses show is remembered.
+function cases.unskinnable_beasts_are_learned_from_their_corpses()
+	local units = {
+		hopper = { name = "Skyhopper", level = 8, ctype = "Beast", id = 2001 },
+		looting = { name = "Skyhopper", level = 8, ctype = "Beast", id = 2001, dead = true, guid = "c1", loot = true },
+		others = { name = "Skyhopper", level = 8, ctype = "Beast", id = 2001, dead = true, guid = "c2", tapped = true },
+		bare = { name = "Skyhopper", level = 8, ctype = "Beast", id = 2001, dead = true, guid = "c3" },
+		byguid = { name = "Mudskipper", level = 9, ctype = "Beast", guid = "Creature-0-4444-0-12-2002-00001A2B3C" },
+		byguidDead = { name = "Mudskipper", level = 9, ctype = "Beast", dead = true, guid = "Creature-0-4444-0-12-2002-00001A2B3D" },
+	}
+	local game, h, tip, post = World(units)
+	T.has(ShowUnit(tip, post, "hopper", { "Skyhopper", "Level 8 Beast" }), "Skinning 1 ?", "not known yet: shown with a question mark")
+	ShowUnit(tip, post, "looting", { "Skyhopper", "Level 8 Beast" })
+	ShowUnit(tip, post, "others", { "Skyhopper", "Level 8 Beast" })
+	T.eq(game.HoverWiseDB.skinnable[2001], nil, "a corpse with loot left, or someone else's, says nothing")
+	ShowUnit(tip, post, "bare", { "Skyhopper", "Level 8 Beast" })
+	T.eq(game.HoverWiseDB.skinnable[2001], false, "looted bare with no Skinnable line")
+	T.lacks(ShowUnit(tip, post, "hopper", { "Skyhopper", "Level 8 Beast" }), "Skinning", "no line on the living ones after that")
+	-- Where the creature's ID has to come from its GUID.
+	game.UnitCreatureID = nil
+	ShowUnit(tip, post, "byguidDead", { "Mudskipper", "Level 9 Beast" })
+	T.eq(game.HoverWiseDB.skinnable[2002], false, "ID read from the GUID")
+	T.lacks(ShowUnit(tip, post, "byguid", { "Mudskipper", "Level 9 Beast" }), "Skinning", "the same kind, another one")
+	T.clean(h)
+end
+
+function cases.skinnable_beasts_stay_skinnable_after_being_skinned()
+	local units = {
+		wolf = { name = "Prairie Wolf", level = 6, ctype = "Beast", id = 3001 },
+		corpse = { name = "Prairie Wolf", level = 6, ctype = "Beast", id = 3001, dead = true },
+		raptor = { name = "Raptor", level = 12, ctype = "Beast", id = 3002 },
+		raptorCorpse = { name = "Raptor", level = 12, ctype = "Beast", id = 3002, dead = true },
+	}
+	local game, h, tip, post = World(units)
+	T.has(ShowUnit(tip, post, "corpse", { "Prairie Wolf", "Level 6 Beast", "Skinnable" }), "Skinning 1", "the corpse line")
+	T.eq(game.HoverWiseDB.skinnable[3001], true, "remembered as skinnable")
+	ShowUnit(tip, post, "corpse", { "Prairie Wolf", "Level 6 Beast" })   -- skinned: bare, no line
+	T.eq(game.HoverWiseDB.skinnable[3001], true, "a skinned corpse doesn't undo it")
+	local living = ShowUnit(tip, post, "wolf", { "Prairie Wolf", "Level 6 Beast" })
+	T.has(living, "Skinning 1", "still shown on the living")
+	T.lacks(living, "?", "and no question mark once a corpse has confirmed it")
+	-- Wrongly learned as unskinnable (first seen already skinned), then put right by a corpse that shows the line.
+	ShowUnit(tip, post, "raptorCorpse", { "Raptor", "Level 12 Beast" })
+	T.eq(game.HoverWiseDB.skinnable[3002], false, "first seen bare")
+	ShowUnit(tip, post, "raptorCorpse", { "Raptor", "Level 12 Beast", "Skinnable" })
+	T.eq(game.HoverWiseDB.skinnable[3002], true, "corrected by the Skinnable line")
 	T.clean(h)
 end
 

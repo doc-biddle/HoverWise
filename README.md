@@ -26,7 +26,7 @@ A small WoW Forever addon that makes tooltips more useful. Every feature below c
 
 ### Professions
 - **Gathering level** on ore veins and herbs ("Mining 175", "Herbalism 205").
-- **Skinning level** on skinnable corpses, and optionally on living beasts before you kill them (not on hunter pets or other player-controlled creatures).
+- **Skinning level** on skinnable corpses, and optionally on living beasts before you kill them (not on hunter pets or other player-controlled creatures). Not every beast can be skinned and the game only says so on the corpse, so HoverWise learns it: after you have looted one of a kind bare with no "Skinnable" line, the living ones stop showing a level, and until a corpse has settled it the level carries a question mark.
 - **Recipe status** on recipes, patterns and plans: the skill they need, and whether you know them, can learn them, or what your skill is now.
 - **Lockpicking level** on lockboxes and junkboxes.
 - Gathering, skinning and lockpicking levels only show on characters that have the skill.

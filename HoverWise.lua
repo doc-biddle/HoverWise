@@ -159,8 +159,8 @@ local function SkillColor(rank, need)
 	return "|cff808080"
 end
 
-local function SkillText(profession, need)
-	return SkillColor(SkillRank(profession), need) .. profession .. " " .. need .. "|r"
+local function SkillText(profession, need, unsure)
+	return SkillColor(SkillRank(profession), need) .. profession .. " " .. need .. (unsure and " ?" or "") .. "|r"
 end
 
 -- Looks ---------------------------------------------------------------------------------------------------------
@@ -475,7 +475,30 @@ local function SkinningNeed(level)
 end
 
 local SKINNABLE = UNIT_SKINNABLE_LEATHER or "Skinnable"
+local SKINNED = UNIT_ALREADY_SKINNED_LEATHER
 local BEAST = "Beast"
+
+-- The game doesn't say whether a living creature can be skinned, and not every beast can. So what corpses show is
+-- remembered by kind of creature (HoverWiseDB.skinnable[npcID] = true or false), for every character.
+local function CreatureID(unit)
+	local id = UnitCreatureID and Plain(UnitCreatureID(unit))
+	if type(id) == "number" and id > 0 then return id end
+	local guid = Plain(UnitGUID(unit))
+	local kind, npc = (type(guid) == "string" and guid or ""):match("^(%a+)%-%d+%-%d+%-%d+%-%d+%-(%d+)%-")
+	if kind == "Creature" or kind == "Vehicle" then return tonumber(npc) end
+end
+
+-- A corpse you could have looted with nothing left on it. One that is still being looted, or that belongs to
+-- someone else, says nothing yet about skinning.
+local function Emptied(unit)
+	local guid = Plain(UnitGUID(unit))
+	if type(guid) ~= "string" or not CanLootUnit then return false end
+	local hasLoot = CanLootUnit(guid)
+	if Secret(hasLoot) or hasLoot then return false end
+	local denied = UnitIsTapDenied and UnitIsTapDenied(unit)
+	if Secret(denied) or denied then return false end
+	return true
+end
 
 local function AddSkinning(tooltip, unit)
 	local db = DB()
@@ -488,13 +511,26 @@ local function AddSkinning(tooltip, unit)
 	local level = Plain(UnitLevel(unit))
 	if not level or level <= 0 then return end
 	local text = SkillText("Skinning", SkinningNeed(level))
+	local id = CreatureID(unit)
+	db.skinnable = db.skinnable or {}
+	local beast = UnitCreatureType and Plain(UnitCreatureType(unit)) == BEAST
 	if Plain(UnitIsDead(unit)) then
 		local fs = FindLine(tooltip, function(t) return t == SKINNABLE end)
-		if fs then fs:SetText(text) end
-	elseif db.skinLiving and UnitCreatureType and Plain(UnitCreatureType(unit)) == BEAST
+		if fs then
+			fs:SetText(text)
+			if id then db.skinnable[id] = true end
+		elseif id and FindLine(tooltip, function(t) return t == SKINNED end) then
+			db.skinnable[id] = true
+		elseif id and beast and db.skinnable[id] == nil and Emptied(unit) then
+			-- Looted bare and still no "Skinnable" line: this kind can't be skinned. (A corpse that has been skinned
+			-- looks the same, so a kind already known to be skinnable stays so, and seeing the line later corrects it.)
+			db.skinnable[id] = false
+		end
+	elseif db.skinLiving and beast and not (id and db.skinnable[id] == false)
 		-- only beasts you can fight: not quest givers such as the Great Cat Spirit, or other friendly beasts
 		and UnitCanAttack and Plain(UnitCanAttack("player", unit)) then
-		tooltip:AddLine(text)
+		-- A question mark until a corpse of this kind has shown that it can be skinned.
+		tooltip:AddLine((id and db.skinnable[id]) and text or SkillText("Skinning", SkinningNeed(level), true))
 	end
 end
 
