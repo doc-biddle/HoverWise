@@ -3,6 +3,9 @@
 Versions follow semantic versioning: MAJOR.MINOR.PATCH.
 MAJOR for changes that break saved settings or commands, MINOR for new features, PATCH for fixes.
 
+## 1.3.2 (2026-11-25)
+- Forever's new Heavy Thorium Vein (Mount Hyjal) shows the Mining skill it needs, 300, like the other ore veins.
+
 ## 1.3.1 (2026-11-21)
 - The skinning line on living beasts no longer shows on kinds that can't be skinned. The game only says so on the corpse, so HoverWise remembers what corpses show: once you have looted one bare and it had no "Skinnable" line, the living ones of that kind stop showing a skinning level. Until a corpse has settled it either way, the level on a living beast carries a question mark, such as "Skinning 1 ?". This is shared by all your characters.
 

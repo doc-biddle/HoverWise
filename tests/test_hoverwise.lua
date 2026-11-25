@@ -249,6 +249,7 @@ end
 function cases.node_shows_the_level_for_a_miner()
 	local _, h, tip = World({})
 	T.has(ShowNode(h, tip, "Tin Vein", { "Tin Vein", "Requires Mining" }), "Mining 65", "tin vein for a miner")
+	T.has(ShowNode(h, tip, "Heavy Thorium Vein", { "Heavy Thorium Vein", "Requires Mining" }), "Mining 300", "Forever's Heavy Thorium vein")
 	T.clean(h)
 end
 

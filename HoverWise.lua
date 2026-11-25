@@ -416,6 +416,7 @@ local NODES = {
 	["Rich Thorium Vein"] = { "Mining", 275 },
 	["Ooze Covered Rich Thorium Vein"] = { "Mining", 275 },
 	["Hakkari Thorium Vein"] = { "Mining", 275 },
+	["Heavy Thorium Vein"] = { "Mining", 300 },   -- new in WoW Forever (Mount Hyjal)
 	["Small Obsidian Chunk"] = { "Mining", 305 },
 	["Large Obsidian Chunk"] = { "Mining", 305 },
 	-- Herbalism
